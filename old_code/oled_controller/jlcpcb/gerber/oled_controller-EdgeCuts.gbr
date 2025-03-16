@@ -1,0 +1,23 @@
+%TF.GenerationSoftware,KiCad,Pcbnew,8.0.3*%
+%TF.CreationDate,2024-10-26T21:30:25-07:00*%
+%TF.ProjectId,oled_controller,6f6c6564-5f63-46f6-9e74-726f6c6c6572,rev?*%
+%TF.SameCoordinates,Original*%
+%TF.FileFunction,Profile,NP*%
+%FSLAX46Y46*%
+G04 Gerber Fmt 4.6, Leading zero omitted, Abs format (unit mm)*
+G04 Created by KiCad (PCBNEW 8.0.3) date 2024-10-26 21:30:25*
+%MOMM*%
+%LPD*%
+G01*
+G04 APERTURE LIST*
+%TA.AperFunction,Profile*%
+%ADD10C,0.050000*%
+%TD*%
+G04 APERTURE END LIST*
+D10*
+X50000000Y-50000000D02*
+X117500000Y-50000000D01*
+X117500000Y-82000000D01*
+X50000000Y-82000000D01*
+X50000000Y-50000000D01*
+M02*
