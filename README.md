@@ -139,6 +139,7 @@ controller = OLEDController(
 
 #### Display Methods
 ```python
+# Method 1: Direct controller methods
 controller.clear()                    # Clear display
 controller.show()                     # Update display
 controller.pixel(x, y, color=1)      # Set pixel
@@ -151,13 +152,30 @@ controller.text_width(text)               # Get text width
 controller.contrast(level)                # Set contrast (0-255)
 controller.invert(True/False)             # Invert colors
 controller.poweroff()                     # Turn off display
+
+# Method 2: Display sub-controller access (recommended)
+controller.display.clear()               # Direct display control
+controller.display.show()                # Update display
+controller.display.pixel(x, y, color)    # Set pixel
+controller.display.text(text, x, y)      # Draw text
+controller.display.center_text(text, y)  # Centered text
 ```
 
 #### Button Methods
 ```python
+# Method 1: Direct controller methods
 controller.update_buttons()           # Update button states
 controller.button_pressed(button)     # Check if button is pressed
 controller.button_just_pressed(button) # Check if button was just pressed
+controller.get_pressed_buttons()      # Get list of pressed buttons
+controller.get_just_pressed_buttons() # Get list of just pressed buttons
+
+# Method 2: Button sub-controller access (recommended)
+controller.buttons.update()          # Update button states
+controller.buttons.is_pressed(button) # Check if button is pressed
+controller.buttons.was_pressed(button) # Check if button was just pressed
+controller.buttons.get_pressed_buttons() # Get list of pressed buttons
+controller.buttons.get_just_pressed_buttons() # Get list of just pressed
 ```
 
 #### RGB LED Methods (JOLED Only)
@@ -192,26 +210,28 @@ controller.scan_i2c()               # Scan I2C bus for devices
 controller = OLEDController.create_joled()  # Pre-configured for JOLED
 ```
 
-### RGBController Class (Standalone)
+### Standalone Sub-Controllers
 
 ```python
-from oled_controller import RGBController
+from oled_controller import DisplayController, ButtonController, RGBController
 from machine import I2C, Pin
 
-# Create standalone RGB controller
+# Create I2C bus
 i2c = I2C(0, sda=Pin(6), scl=Pin(7))
+
+# Create standalone controllers
+display = DisplayController(i2c, width=128, height=64, addr=0x3C)
+buttons = ButtonController(i2c, addr=0x20, num_buttons=8, is_joled=True)  
 rgb = RGBController(i2c, addr=0x20)
 
-# RGB control
-rgb.set(red=True, green=False, blue=False)  # Set individual colors
-rgb.color('blue')                           # Set predefined color
-rgb.off()                                   # Turn off
+# Use independently
+display.clear()
+display.text("Standalone", 0, 0)
+display.show()
 
-# Animations
-rgb.pulse('red', speed=0.1, count=3, callback=done_func)
-rgb.flash('green', count=5, on_time=200, off_time=100)
-rgb.stop_animation()                        # Stop any animation
-rgb.is_animating()                         # Check if animating
+buttons.update()
+if buttons.is_pressed(0):
+    rgb.color('red')
 ```
 
 ### Font5x7 Class
@@ -292,37 +312,49 @@ for color in colors:
 controller.rgb_off()
 ```
 
-### JOLED RGB Sub-Controller Demo
+### All Sub-Controllers Demo
 ```python
 from oled_controller import OLEDController
 import time
 
 controller = OLEDController.create_joled()
 
-# Access RGB as a sub-controller
+# Access all sub-controllers
+display = controller.display
+buttons = controller.buttons
 rgb = controller.rgb
 
-# Direct RGB control
-rgb.color('red')
+# Display sub-controller
+display.clear()
+display.center_text("Sub-Controllers", 10)
+display.center_text("Demo", 25)
+display.show()
+
+# RGB sub-controller
+rgb.color('blue')
 time.sleep(1)
 
-# Pulse with callback
-def pulse_complete():
-    print("Pulsing done!")
-    rgb.color('green')  # Switch to solid green
+# Button sub-controller
+while True:
+    buttons.update()
+    pressed = buttons.get_pressed_buttons()
+    
+    if pressed:
+        display.clear()
+        display.text(f"Pressed: {pressed}", 0, 20)
+        display.show()
+        
+        # Change RGB based on buttons
+        if 0 in pressed:
+            rgb.color('red')
+        elif 1 in pressed:
+            rgb.pulse('green', count=2)
+            
+    if buttons.was_pressed(7):  # Center to exit
+        break
+    
+    time.sleep(0.05)
 
-rgb.pulse('blue', speed=0.1, count=3, callback=pulse_complete)
-
-# Wait for pulsing to complete
-while rgb.is_pulsing():
-    time.sleep(0.1)
-
-# Flash sequence
-rgb.flash('yellow', count=5, on_time=200, off_time=100)
-
-# Manual RGB control
-rgb.set(red=True, green=True, blue=False)  # Yellow
-time.sleep(1)
 rgb.off()
 ```
 
