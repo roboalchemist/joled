@@ -181,19 +181,21 @@ class SSD1306_I2C:
 
 
 class ButtonController:
-    """I2C GPIO expander button controller"""
+    """I2C GPIO expander button controller with RGB LED support"""
     
-    def __init__(self, i2c, addr=0x20, num_buttons=4):
+    def __init__(self, i2c, addr=0x20, num_buttons=4, has_rgb=False):
         self.i2c = i2c
         self.addr = addr
         self.num_buttons = num_buttons
         self.button_states = [False] * num_buttons
         self.last_states = [False] * num_buttons
+        self.has_rgb = has_rgb
+        self.rgb_state = 0x0700  # Default: LEDs off (active low)
         
         # Initialize GPIO expander if present
         try:
             # Try to read from device to check if it exists
-            self.i2c.readfrom(self.addr, 1)
+            self.i2c.readfrom(self.addr, 2)
             self.has_expander = True
             self._init_expander()
         except:
@@ -202,9 +204,34 @@ class ButtonController:
     
     def _init_expander(self):
         """Initialize GPIO expander for button input"""
-        # Configure all pins as inputs with pull-ups
-        # This is generic - specific implementation depends on GPIO expander type
-        pass
+        if self.has_rgb:
+            # For JOLED: Initialize PCF8575 with baseline state
+            # Buttons low (P0-P7), LEDs high/off (P8-P10)
+            self._write_gpio(0x0700)
+    
+    def _write_gpio(self, value):
+        """Write 16-bit value to PCF8575"""
+        if not self.has_expander:
+            return
+        try:
+            # PCF8575 expects LSB first
+            low_byte = value & 0xFF
+            high_byte = (value >> 8) & 0xFF
+            self.i2c.writeto(self.addr, bytes([low_byte, high_byte]))
+            if self.has_rgb:
+                self.rgb_state = value
+        except:
+            pass
+    
+    def _read_gpio(self):
+        """Read 16-bit value from PCF8575"""
+        if not self.has_expander:
+            return 0
+        try:
+            data = self.i2c.readfrom(self.addr, 2)
+            return data[0] | (data[1] << 8)
+        except:
+            return 0
     
     def update(self):
         """Update button states"""
@@ -212,13 +239,19 @@ class ButtonController:
             return
         
         try:
-            # Read button states from GPIO expander
-            data = self.i2c.readfrom(self.addr, 1)[0]
-            
-            # Update button states
-            self.last_states = self.button_states.copy()
-            for i in range(self.num_buttons):
-                self.button_states[i] = not bool(data & (1 << i))  # Invert for pull-up
+            if self.has_rgb:
+                # Read 16-bit value from PCF8575
+                data = self._read_gpio()
+                # Update button states from lower 8 bits
+                self.last_states = self.button_states.copy()
+                for i in range(self.num_buttons):
+                    self.button_states[i] = bool(data & (1 << i))  # Active high for JOLED
+            else:
+                # Generic GPIO expander - read 8 bits
+                data = self.i2c.readfrom(self.addr, 1)[0]
+                self.last_states = self.button_states.copy()
+                for i in range(self.num_buttons):
+                    self.button_states[i] = not bool(data & (1 << i))  # Invert for pull-up
         except:
             pass
     
@@ -233,6 +266,46 @@ class ButtonController:
         if 0 <= button < self.num_buttons:
             return self.button_states[button] and not self.last_states[button]
         return False
+    
+    def set_rgb(self, red=False, green=False, blue=False):
+        """Set RGB LED colors (for JOLED hardware)"""
+        if not self.has_rgb or not self.has_expander:
+            return
+        
+        # LEDs are active low on P8, P9, P10
+        # Start with current state but clear LED bits
+        new_state = self.rgb_state & 0x00FF  # Keep button state, clear upper bits
+        
+        # Set LED bits (active low: 0 = on, 1 = off)
+        if not red:
+            new_state |= (1 << 8)   # P8 high = red off
+        if not green:
+            new_state |= (1 << 9)   # P9 high = green off  
+        if not blue:
+            new_state |= (1 << 10)  # P10 high = blue off
+        
+        self._write_gpio(new_state)
+    
+    def rgb_off(self):
+        """Turn off all RGB LEDs"""
+        self.set_rgb(False, False, False)
+    
+    def rgb_color(self, color):
+        """Set RGB LED to predefined color"""
+        colors = {
+            'red': (True, False, False),
+            'green': (False, True, False), 
+            'blue': (False, False, True),
+            'yellow': (True, True, False),
+            'magenta': (True, False, True),
+            'cyan': (False, True, True),
+            'white': (True, True, True),
+            'off': (False, False, False)
+        }
+        
+        if color.lower() in colors:
+            r, g, b = colors[color.lower()]
+            self.set_rgb(r, g, b)
 
 
 class OLEDController:
@@ -240,12 +313,12 @@ class OLEDController:
     
     def __init__(self, i2c_bus=0, sda_pin=4, scl_pin=5, 
                  oled_addr=0x3C, button_addr=0x20,
-                 width=128, height=64, num_buttons=4):
+                 width=128, height=64, num_buttons=4, has_rgb=False):
         """
         Initialize OLED controller
         
         Args:
-            i2c_bus: I2C bus number (0 or 1)
+            i2c_bus: I2C bus number (0 or 1) or existing I2C instance
             sda_pin: SDA pin number
             scl_pin: SCL pin number
             oled_addr: I2C address of OLED display
@@ -253,6 +326,7 @@ class OLEDController:
             width: Display width in pixels
             height: Display height in pixels
             num_buttons: Number of buttons
+            has_rgb: Whether hardware has RGB LED support (JOLED)
         """
         # Initialize I2C
         if isinstance(i2c_bus, I2C):
@@ -264,7 +338,7 @@ class OLEDController:
         self.display = SSD1306_I2C(width, height, self.i2c, oled_addr)
         
         # Initialize button controller
-        self.buttons = ButtonController(self.i2c, button_addr, num_buttons)
+        self.buttons = ButtonController(self.i2c, button_addr, num_buttons, has_rgb)
         
         # Initialize font
         self.font = Font5x7()
@@ -273,6 +347,7 @@ class OLEDController:
         self.width = width
         self.height = height
         self.num_buttons = num_buttons
+        self.has_rgb = has_rgb
     
     def clear(self):
         """Clear the display"""
@@ -355,3 +430,32 @@ class OLEDController:
         for device in devices:
             print(f"  0x{device:02X}")
         return devices
+    
+    # RGB LED Methods (JOLED hardware)
+    def set_rgb(self, red=False, green=False, blue=False):
+        """Set RGB LED colors (JOLED only)"""
+        if self.has_rgb:
+            self.buttons.set_rgb(red, green, blue)
+    
+    def rgb_off(self):
+        """Turn off RGB LED (JOLED only)"""
+        if self.has_rgb:
+            self.buttons.rgb_off()
+    
+    def rgb_color(self, color):
+        """Set RGB LED to predefined color (JOLED only)
+        
+        Available colors: red, green, blue, yellow, magenta, cyan, white, off
+        """
+        if self.has_rgb:
+            self.buttons.rgb_color(color)
+    
+    @staticmethod
+    def create_joled(sda_pin=6, scl_pin=7):
+        """Create OLEDController configured for JOLED hardware"""
+        return OLEDController(
+            sda_pin=sda_pin,
+            scl_pin=scl_pin,
+            num_buttons=8,
+            has_rgb=True
+        )

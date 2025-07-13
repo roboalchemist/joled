@@ -28,13 +28,14 @@ mpremote mip install github:roboalchemist/joled
 ```python
 from oled_controller import OLEDController
 
-# Initialize JOLED controller
-controller = OLEDController(sda_pin=6, scl_pin=7)
+# Initialize JOLED controller with RGB support
+controller = OLEDController.create_joled()
 
 # Clear display and show text
 controller.clear()
 controller.text("Hello World!", 0, 0)
 controller.center_text("Centered", 20)
+controller.rgb_color('blue')  # Set LED to blue
 controller.show()
 
 # Check button input (8 total inputs: 5-way D-pad + 3 buttons)
@@ -42,6 +43,7 @@ controller.update_buttons()
 if controller.button_just_pressed(7):  # Center button
     controller.clear()
     controller.text("Center pressed!", 0, 0)
+    controller.rgb_color('green')  # Change LED to green
     controller.show()
 ```
 
@@ -112,10 +114,14 @@ JOLED Controller:
 #### Initialization
 ```python
 # JOLED Controller (recommended)
+controller = OLEDController.create_joled()  # Pre-configured for JOLED
+
+# Or manually configure JOLED
 controller = OLEDController(
     sda_pin=6,          # JOLED SDA pin
     scl_pin=7,          # JOLED SCL pin
-    num_buttons=8       # 5-way D-pad + 3 buttons
+    num_buttons=8,      # 5-way D-pad + 3 buttons
+    has_rgb=True        # Enable RGB LED support
 )
 
 # Generic setup (other hardware)
@@ -154,9 +160,19 @@ controller.button_pressed(button)     # Check if button is pressed
 controller.button_just_pressed(button) # Check if button was just pressed
 ```
 
+#### RGB LED Methods (JOLED Only)
+```python
+controller.set_rgb(red=True, green=False, blue=False)  # Set individual colors
+controller.rgb_color('red')                           # Set predefined color
+controller.rgb_off()                                  # Turn off RGB LED
+```
+
 #### Utility Methods
 ```python
 controller.scan_i2c()               # Scan I2C bus for devices
+
+# JOLED Helper
+controller = OLEDController.create_joled()  # Pre-configured for JOLED
 ```
 
 ### Font5x7 Class
@@ -217,6 +233,26 @@ while True:
     time.sleep(0.1)
 ```
 
+### JOLED RGB LED Demo
+```python
+from oled_controller import OLEDController
+import time
+
+# Initialize JOLED with RGB support
+controller = OLEDController.create_joled()
+
+colors = ['red', 'green', 'blue', 'yellow', 'magenta', 'cyan', 'white']
+
+for color in colors:
+    controller.clear()
+    controller.center_text(f"Color: {color}", 20)
+    controller.rgb_color(color)
+    controller.show()
+    time.sleep(1)
+
+controller.rgb_off()
+```
+
 ### Graphics Demo
 ```python
 from oled_controller import OLEDController
@@ -237,8 +273,9 @@ controller.show()
 
 ### JOLED Controller Setup
 ```python
-# JOLED with default settings
-controller = OLEDController(sda_pin=6, scl_pin=7, num_buttons=8)
+# JOLED with RGB LED support
+controller = OLEDController.create_joled()
+# Or: controller = OLEDController(sda_pin=6, scl_pin=7, num_buttons=8, has_rgb=True)
 ```
 
 ### Custom I2C Pins (Other Hardware)
@@ -291,14 +328,26 @@ BUTTON_MAP = {
 ```
 
 ### JOLED RGB LED Control
-The RGB LED can be controlled by writing directly to the PCF8575 (pins P8-P10 are active low):
 ```python
-# RGB LED control (requires direct I2C access)
-# Note: LEDs are active low, so 0 = ON, 1 = OFF
-controller.i2c.writeto(0x20, bytes([0x0700]))  # All LEDs off
-controller.i2c.writeto(0x20, bytes([0x06FF]))  # Red LED on
-controller.i2c.writeto(0x20, bytes([0x05FF]))  # Green LED on  
-controller.i2c.writeto(0x20, bytes([0x03FF]))  # Blue LED on
+# Initialize JOLED with RGB support
+controller = OLEDController.create_joled()
+
+# Set individual colors
+controller.set_rgb(red=True, green=False, blue=False)  # Red only
+controller.set_rgb(red=True, green=True, blue=False)   # Yellow
+
+# Use predefined colors
+controller.rgb_color('red')      # Red
+controller.rgb_color('green')    # Green  
+controller.rgb_color('blue')     # Blue
+controller.rgb_color('yellow')   # Yellow
+controller.rgb_color('magenta')  # Magenta
+controller.rgb_color('cyan')     # Cyan
+controller.rgb_color('white')    # White
+controller.rgb_color('off')      # Turn off
+
+# Turn off RGB LED
+controller.rgb_off()
 ```
 
 ### Common I2C Addresses
