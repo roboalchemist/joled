@@ -119,7 +119,9 @@ class DisplayController:
     
     def fill(self, color):
         """Fill entire display with color (0 or 1)"""
-        self.buffer[:] = [0xFF if color else 0x00] * len(self.buffer)
+        fill_byte = 0xFF if color else 0x00
+        for i in range(len(self.buffer)):
+            self.buffer[i] = fill_byte
     
     def clear(self):
         """Clear the display"""
