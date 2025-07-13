@@ -15,7 +15,7 @@ A MicroPython library for controlling I2C OLED displays with integrated button i
 ### Using mpremote (Recommended)
 
 ```bash
-mpremote mip install github:joled/micropython-oled-controller
+mpremote mip install github:roboalchemist/joled
 ```
 
 ### Manual Installation
