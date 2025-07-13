@@ -6,6 +6,289 @@ from machine import Pin, I2C, Timer
 from micropython import const
 from .font5x7 import Font5x7
 
+
+class RGBController:
+    """RGB LED controller for JOLED hardware with animation support"""
+    
+    def __init__(self, i2c, addr=0x20):
+        self.i2c = i2c
+        self.addr = addr
+        self.has_expander = False
+        self.rgb_state = 0x0700  # Default: LEDs off (active low)
+        
+        # Animation state
+        self.pulse_timer = None
+        self.pulse_active = False
+        self.pulse_color = [False, False, False]  # [R, G, B]
+        self.pulse_brightness = 0.0
+        self.pulse_direction = 1
+        self.pulse_speed = 0.1
+        self.pulse_callback = None
+        self.pulse_count = 0
+        self.pulse_max = -1  # -1 = infinite
+        
+        # Check if expander is available
+        try:
+            self.i2c.readfrom(self.addr, 2)
+            self.has_expander = True
+            self._init_rgb()
+        except:
+            print("Warning: RGB controller not available at address", hex(self.addr))
+    
+    def _init_rgb(self):
+        """Initialize RGB LED with baseline state"""
+        if self.has_expander:
+            self._write_gpio(0x0700)  # LEDs off (active low)
+    
+    def _write_gpio(self, value):
+        """Write 16-bit value to PCF8575"""
+        if not self.has_expander:
+            return
+        try:
+            low_byte = value & 0xFF
+            high_byte = (value >> 8) & 0xFF
+            self.i2c.writeto(self.addr, bytes([low_byte, high_byte]))
+            self.rgb_state = value
+        except:
+            pass
+    
+    def _read_gpio(self):
+        """Read 16-bit value from PCF8575"""
+        if not self.has_expander:
+            return 0
+        try:
+            data = self.i2c.readfrom(self.addr, 2)
+            return data[0] | (data[1] << 8)
+        except:
+            return 0
+    
+    def set(self, red=False, green=False, blue=False):
+        """Set RGB LED colors
+        
+        Args:
+            red: Red LED state (True=on, False=off)
+            green: Green LED state (True=on, False=off)  
+            blue: Blue LED state (True=on, False=off)
+        """
+        if not self.has_expander:
+            return
+        
+        # LEDs are active low on P8, P9, P10
+        # Keep button state (lower 8 bits), modify LED bits
+        new_state = self.rgb_state & 0x00FF
+        
+        # Set LED bits (active low: 0 = on, 1 = off)
+        if not red:
+            new_state |= (1 << 8)   # P8 high = red off
+        if not green:
+            new_state |= (1 << 9)   # P9 high = green off  
+        if not blue:
+            new_state |= (1 << 10)  # P10 high = blue off
+        
+        self._write_gpio(new_state)
+    
+    def off(self):
+        """Turn off all RGB LEDs"""
+        self.set(False, False, False)
+    
+    def color(self, color_name):
+        """Set RGB LED to predefined color
+        
+        Args:
+            color_name: Color name (red, green, blue, yellow, magenta, cyan, white, off)
+        """
+        colors = {
+            'red': (True, False, False),
+            'green': (False, True, False), 
+            'blue': (False, False, True),
+            'yellow': (True, True, False),
+            'magenta': (True, False, True),
+            'cyan': (False, True, True),
+            'white': (True, True, True),
+            'off': (False, False, False)
+        }
+        
+        if color_name.lower() in colors:
+            r, g, b = colors[color_name.lower()]
+            self.set(r, g, b)
+    
+    def _pulse_timer_callback(self, timer):
+        """Timer callback for RGB pulsing"""
+        if not self.pulse_active:
+            return
+        
+        # Update brightness based on direction
+        self.pulse_brightness += self.pulse_direction * self.pulse_speed
+        
+        # Bounce between 0.0 and 1.0
+        if self.pulse_brightness >= 1.0:
+            self.pulse_brightness = 1.0
+            self.pulse_direction = -1
+            self.pulse_count += 1
+        elif self.pulse_brightness <= 0.0:
+            self.pulse_brightness = 0.0
+            self.pulse_direction = 1
+        
+        # Apply brightness to color (simple on/off for PCF8575)
+        show_color = self.pulse_brightness > 0.5
+        if show_color:
+            self.set(self.pulse_color[0], self.pulse_color[1], self.pulse_color[2])
+        else:
+            self.set(False, False, False)
+        
+        # Check if we've completed the requested number of pulses
+        if self.pulse_max > 0 and self.pulse_count >= self.pulse_max:
+            self.stop_pulse()
+            if self.pulse_callback:
+                self.pulse_callback()
+    
+    def pulse(self, color, speed=0.1, count=-1, callback=None):
+        """Start pulsing RGB LED with specified color
+        
+        Args:
+            color: Color to pulse (string or RGB tuple)
+            speed: Pulse speed (0.05-0.5, lower = faster)
+            count: Number of complete pulses (-1 = infinite)
+            callback: Function to call when pulsing completes
+        """
+        if not self.has_expander:
+            return
+        
+        # Stop any existing animation
+        self.stop_pulse()
+        
+        # Parse color
+        if isinstance(color, str):
+            colors = {
+                'red': (True, False, False),
+                'green': (False, True, False), 
+                'blue': (False, False, True),
+                'yellow': (True, True, False),
+                'magenta': (True, False, True),
+                'cyan': (False, True, True),
+                'white': (True, True, True)
+            }
+            if color.lower() in colors:
+                self.pulse_color = list(colors[color.lower()])
+            else:
+                self.pulse_color = [True, True, True]  # Default to white
+        elif isinstance(color, (list, tuple)) and len(color) >= 3:
+            self.pulse_color = [bool(color[0]), bool(color[1]), bool(color[2])]
+        else:
+            self.pulse_color = [True, True, True]  # Default to white
+        
+        # Set pulse parameters
+        self.pulse_speed = max(0.05, min(0.5, speed))
+        self.pulse_max = count
+        self.pulse_count = 0
+        self.pulse_brightness = 0.0
+        self.pulse_direction = 1
+        self.pulse_callback = callback
+        self.pulse_active = True
+        
+        # Start timer (50ms intervals for smooth animation)
+        self.pulse_timer = Timer(-1)
+        self.pulse_timer.init(period=50, mode=Timer.PERIODIC, callback=self._pulse_timer_callback)
+    
+    def stop_pulse(self):
+        """Stop RGB LED pulsing"""
+        self.pulse_active = False
+        if self.pulse_timer:
+            self.pulse_timer.deinit()
+            self.pulse_timer = None
+        # Turn off LED when stopping
+        self.off()
+    
+    def is_pulsing(self):
+        """Check if RGB LED is currently pulsing"""
+        return self.pulse_active
+    
+    def flash(self, color, count=3, on_time=200, off_time=200, callback=None):
+        """Flash RGB LED a specific number of times
+        
+        Args:
+            color: Color to flash
+            count: Number of flashes
+            on_time: Time LED is on (ms)
+            off_time: Time LED is off (ms)
+            callback: Function to call when flashing completes
+        """
+        if not self.has_expander:
+            return
+        
+        self.stop_pulse()  # Stop any existing animation
+        
+        # Parse color
+        if isinstance(color, str):
+            colors = {
+                'red': (True, False, False),
+                'green': (False, True, False), 
+                'blue': (False, False, True),
+                'yellow': (True, True, False),
+                'magenta': (True, False, True),
+                'cyan': (False, True, True),
+                'white': (True, True, True)
+            }
+            if color.lower() in colors:
+                flash_color = colors[color.lower()]
+            else:
+                flash_color = (True, True, True)
+        else:
+            flash_color = (True, True, True)
+        
+        # Flash sequence state
+        self.flash_state = {
+            'color': flash_color,
+            'count': count,
+            'remaining': count,
+            'on_time': on_time,
+            'off_time': off_time,
+            'callback': callback,
+            'led_on': False,
+            'timer': None
+        }
+        
+        # Start flash sequence
+        self._flash_step()
+    
+    def _flash_step(self):
+        """Execute one step of the flash sequence"""
+        if not hasattr(self, 'flash_state') or self.flash_state['remaining'] <= 0:
+            # Flash sequence complete
+            if hasattr(self, 'flash_state') and self.flash_state['callback']:
+                self.flash_state['callback']()
+            return
+        
+        if self.flash_state['led_on']:
+            # Turn LED off
+            self.set(False, False, False)
+            self.flash_state['led_on'] = False
+            self.flash_state['remaining'] -= 1
+            next_time = self.flash_state['off_time']
+        else:
+            # Turn LED on
+            r, g, b = self.flash_state['color']
+            self.set(r, g, b)
+            self.flash_state['led_on'] = True
+            next_time = self.flash_state['on_time']
+        
+        # Schedule next step
+        if self.flash_state['remaining'] > 0 or self.flash_state['led_on']:
+            self.flash_state['timer'] = Timer(-1)
+            self.flash_state['timer'].init(
+                period=next_time, 
+                mode=Timer.ONE_SHOT, 
+                callback=lambda t: self._flash_step()
+            )
+    
+    def stop_animation(self):
+        """Stop any RGB LED animation (pulsing/flashing)"""
+        self.stop_pulse()
+    
+    def is_animating(self):
+        """Check if RGB LED is currently animating"""
+        return self.is_pulsing()
+
 # SSD1306 OLED Commands
 SET_CONTRAST = const(0x81)
 SET_ENTIRE_ON = const(0xA4)
@@ -181,66 +464,41 @@ class SSD1306_I2C:
 
 
 class ButtonController:
-    """I2C GPIO expander button controller with RGB LED support"""
+    """I2C GPIO expander button controller"""
     
-    def __init__(self, i2c, addr=0x20, num_buttons=4, has_rgb=False):
+    def __init__(self, i2c, addr=0x20, num_buttons=4, is_joled=False):
         self.i2c = i2c
         self.addr = addr
         self.num_buttons = num_buttons
         self.button_states = [False] * num_buttons
         self.last_states = [False] * num_buttons
-        self.has_rgb = has_rgb
-        self.rgb_state = 0x0700  # Default: LEDs off (active low)
-        
-        # RGB pulsing/animation state
-        self.pulse_timer = None
-        self.pulse_active = False
-        self.pulse_color = [False, False, False]  # [R, G, B]
-        self.pulse_brightness = 0.0
-        self.pulse_direction = 1
-        self.pulse_speed = 0.1
-        self.pulse_callback = None
-        self.pulse_count = 0
-        self.pulse_max = -1  # -1 = infinite
+        self.is_joled = is_joled
+        self.has_expander = False
         
         # Initialize GPIO expander if present
         try:
-            # Try to read from device to check if it exists
-            self.i2c.readfrom(self.addr, 2)
+            if self.is_joled:
+                # JOLED uses 16-bit PCF8575
+                self.i2c.readfrom(self.addr, 2)
+            else:
+                # Generic uses 8-bit expander
+                self.i2c.readfrom(self.addr, 1)
             self.has_expander = True
-            self._init_expander()
         except:
-            self.has_expander = False
-            print("Warning: I2C GPIO expander not found at address", hex(self.addr))
-    
-    def _init_expander(self):
-        """Initialize GPIO expander for button input"""
-        if self.has_rgb:
-            # For JOLED: Initialize PCF8575 with baseline state
-            # Buttons low (P0-P7), LEDs high/off (P8-P10)
-            self._write_gpio(0x0700)
-    
-    def _write_gpio(self, value):
-        """Write 16-bit value to PCF8575"""
-        if not self.has_expander:
-            return
-        try:
-            # PCF8575 expects LSB first
-            low_byte = value & 0xFF
-            high_byte = (value >> 8) & 0xFF
-            self.i2c.writeto(self.addr, bytes([low_byte, high_byte]))
-            if self.has_rgb:
-                self.rgb_state = value
-        except:
-            pass
+            print("Warning: Button controller not found at address", hex(self.addr))
     
     def _read_gpio(self):
-        """Read 16-bit value from PCF8575"""
+        """Read GPIO state from expander"""
         if not self.has_expander:
             return 0
         try:
-            data = self.i2c.readfrom(self.addr, 2)
-            return data[0] | (data[1] << 8)
+            if self.is_joled:
+                # Read 16-bit value from PCF8575
+                data = self.i2c.readfrom(self.addr, 2)
+                return data[0] | (data[1] << 8)
+            else:
+                # Read 8-bit value from generic expander
+                return self.i2c.readfrom(self.addr, 1)[0]
         except:
             return 0
     
@@ -249,22 +507,16 @@ class ButtonController:
         if not self.has_expander:
             return
         
-        try:
-            if self.has_rgb:
-                # Read 16-bit value from PCF8575
-                data = self._read_gpio()
-                # Update button states from lower 8 bits
-                self.last_states = self.button_states.copy()
-                for i in range(self.num_buttons):
-                    self.button_states[i] = bool(data & (1 << i))  # Active high for JOLED
+        data = self._read_gpio()
+        self.last_states = self.button_states.copy()
+        
+        for i in range(self.num_buttons):
+            if self.is_joled:
+                # JOLED buttons are active high (pulled low, high when pressed)
+                self.button_states[i] = bool(data & (1 << i))
             else:
-                # Generic GPIO expander - read 8 bits
-                data = self.i2c.readfrom(self.addr, 1)[0]
-                self.last_states = self.button_states.copy()
-                for i in range(self.num_buttons):
-                    self.button_states[i] = not bool(data & (1 << i))  # Invert for pull-up
-        except:
-            pass
+                # Generic buttons are active low (pulled high, low when pressed)
+                self.button_states[i] = not bool(data & (1 << i))
     
     def is_pressed(self, button):
         """Check if button is currently pressed"""
@@ -277,217 +529,6 @@ class ButtonController:
         if 0 <= button < self.num_buttons:
             return self.button_states[button] and not self.last_states[button]
         return False
-    
-    def set_rgb(self, red=False, green=False, blue=False):
-        """Set RGB LED colors (for JOLED hardware)"""
-        if not self.has_rgb or not self.has_expander:
-            return
-        
-        # LEDs are active low on P8, P9, P10
-        # Start with current state but clear LED bits
-        new_state = self.rgb_state & 0x00FF  # Keep button state, clear upper bits
-        
-        # Set LED bits (active low: 0 = on, 1 = off)
-        if not red:
-            new_state |= (1 << 8)   # P8 high = red off
-        if not green:
-            new_state |= (1 << 9)   # P9 high = green off  
-        if not blue:
-            new_state |= (1 << 10)  # P10 high = blue off
-        
-        self._write_gpio(new_state)
-    
-    def rgb_off(self):
-        """Turn off all RGB LEDs"""
-        self.set_rgb(False, False, False)
-    
-    def rgb_color(self, color):
-        """Set RGB LED to predefined color"""
-        colors = {
-            'red': (True, False, False),
-            'green': (False, True, False), 
-            'blue': (False, False, True),
-            'yellow': (True, True, False),
-            'magenta': (True, False, True),
-            'cyan': (False, True, True),
-            'white': (True, True, True),
-            'off': (False, False, False)
-        }
-        
-        if color.lower() in colors:
-            r, g, b = colors[color.lower()]
-            self.set_rgb(r, g, b)
-    
-    def _pulse_timer_callback(self, timer):
-        """Timer callback for RGB pulsing"""
-        if not self.pulse_active or not self.has_rgb:
-            return
-        
-        # Update brightness based on direction
-        self.pulse_brightness += self.pulse_direction * self.pulse_speed
-        
-        # Bounce between 0.0 and 1.0
-        if self.pulse_brightness >= 1.0:
-            self.pulse_brightness = 1.0
-            self.pulse_direction = -1
-            self.pulse_count += 1
-        elif self.pulse_brightness <= 0.0:
-            self.pulse_brightness = 0.0
-            self.pulse_direction = 1
-        
-        # Apply brightness to color (simple on/off for PCF8575)
-        # For smoother pulsing, we'd need PWM or rapid switching
-        show_color = self.pulse_brightness > 0.5
-        if show_color:
-            self.set_rgb(self.pulse_color[0], self.pulse_color[1], self.pulse_color[2])
-        else:
-            self.set_rgb(False, False, False)
-        
-        # Check if we've completed the requested number of pulses
-        if self.pulse_max > 0 and self.pulse_count >= self.pulse_max:
-            self.stop_pulse()
-            if self.pulse_callback:
-                self.pulse_callback()
-    
-    def start_pulse(self, color, speed=0.1, pulses=-1, callback=None):
-        """Start pulsing RGB LED with specified color
-        
-        Args:
-            color: Color to pulse (string or RGB tuple)
-            speed: Pulse speed (0.05-0.5, lower = faster)
-            pulses: Number of complete pulses (-1 = infinite)
-            callback: Function to call when pulsing completes
-        """
-        if not self.has_rgb or not self.has_expander:
-            return
-        
-        # Stop any existing pulse
-        self.stop_pulse()
-        
-        # Parse color
-        if isinstance(color, str):
-            colors = {
-                'red': (True, False, False),
-                'green': (False, True, False), 
-                'blue': (False, False, True),
-                'yellow': (True, True, False),
-                'magenta': (True, False, True),
-                'cyan': (False, True, True),
-                'white': (True, True, True)
-            }
-            if color.lower() in colors:
-                self.pulse_color = list(colors[color.lower()])
-            else:
-                self.pulse_color = [True, True, True]  # Default to white
-        elif isinstance(color, (list, tuple)) and len(color) >= 3:
-            self.pulse_color = [bool(color[0]), bool(color[1]), bool(color[2])]
-        else:
-            self.pulse_color = [True, True, True]  # Default to white
-        
-        # Set pulse parameters
-        self.pulse_speed = max(0.05, min(0.5, speed))
-        self.pulse_max = pulses
-        self.pulse_count = 0
-        self.pulse_brightness = 0.0
-        self.pulse_direction = 1
-        self.pulse_callback = callback
-        self.pulse_active = True
-        
-        # Start timer (50ms intervals for smooth animation)
-        self.pulse_timer = Timer(-1)
-        self.pulse_timer.init(period=50, mode=Timer.PERIODIC, callback=self._pulse_timer_callback)
-    
-    def stop_pulse(self):
-        """Stop RGB LED pulsing"""
-        self.pulse_active = False
-        if self.pulse_timer:
-            self.pulse_timer.deinit()
-            self.pulse_timer = None
-        # Turn off LED when stopping
-        if self.has_rgb:
-            self.set_rgb(False, False, False)
-    
-    def is_pulsing(self):
-        """Check if RGB LED is currently pulsing"""
-        return self.pulse_active
-    
-    def pulse_flash(self, color, count=3, on_time=200, off_time=200, callback=None):
-        """Flash RGB LED a specific number of times
-        
-        Args:
-            color: Color to flash
-            count: Number of flashes
-            on_time: Time LED is on (ms)
-            off_time: Time LED is off (ms)
-            callback: Function to call when flashing completes
-        """
-        if not self.has_rgb or not self.has_expander:
-            return
-        
-        self.stop_pulse()  # Stop any existing animation
-        
-        # Parse color
-        if isinstance(color, str):
-            colors = {
-                'red': (True, False, False),
-                'green': (False, True, False), 
-                'blue': (False, False, True),
-                'yellow': (True, True, False),
-                'magenta': (True, False, True),
-                'cyan': (False, True, True),
-                'white': (True, True, True)
-            }
-            if color.lower() in colors:
-                flash_color = colors[color.lower()]
-            else:
-                flash_color = (True, True, True)
-        else:
-            flash_color = (True, True, True)
-        
-        # Flash sequence state
-        self.flash_state = {
-            'color': flash_color,
-            'count': count,
-            'remaining': count,
-            'on_time': on_time,
-            'off_time': off_time,
-            'callback': callback,
-            'led_on': False,
-            'timer': None
-        }
-        
-        # Start flash sequence
-        self._flash_step()
-    
-    def _flash_step(self):
-        """Execute one step of the flash sequence"""
-        if not hasattr(self, 'flash_state') or self.flash_state['remaining'] <= 0:
-            # Flash sequence complete
-            if hasattr(self, 'flash_state') and self.flash_state['callback']:
-                self.flash_state['callback']()
-            return
-        
-        if self.flash_state['led_on']:
-            # Turn LED off
-            self.set_rgb(False, False, False)
-            self.flash_state['led_on'] = False
-            self.flash_state['remaining'] -= 1
-            next_time = self.flash_state['off_time']
-        else:
-            # Turn LED on
-            r, g, b = self.flash_state['color']
-            self.set_rgb(r, g, b)
-            self.flash_state['led_on'] = True
-            next_time = self.flash_state['on_time']
-        
-        # Schedule next step
-        if self.flash_state['remaining'] > 0 or self.flash_state['led_on']:
-            self.flash_state['timer'] = Timer(-1)
-            self.flash_state['timer'].init(
-                period=next_time, 
-                mode=Timer.ONE_SHOT, 
-                callback=lambda t: self._flash_step()
-            )
 
 
 class OLEDController:
@@ -519,8 +560,14 @@ class OLEDController:
         # Initialize display
         self.display = SSD1306_I2C(width, height, self.i2c, oled_addr)
         
-        # Initialize button controller
-        self.buttons = ButtonController(self.i2c, button_addr, num_buttons, has_rgb)
+        # Initialize button controller (JOLED uses same address as RGB)
+        is_joled = has_rgb  # JOLED has both buttons and RGB on same PCF8575
+        self.buttons = ButtonController(self.i2c, button_addr, num_buttons, is_joled)
+        
+        # Initialize RGB controller (if enabled)
+        self.rgb = None
+        if has_rgb:
+            self.rgb = RGBController(self.i2c, button_addr)
         
         # Initialize font
         self.font = Font5x7()
@@ -613,36 +660,36 @@ class OLEDController:
             print(f"  0x{device:02X}")
         return devices
     
-    # RGB LED Methods (JOLED hardware)
+    # RGB LED Methods (JOLED hardware) - Direct access to rgb sub-controller
     def set_rgb(self, red=False, green=False, blue=False):
         """Set RGB LED colors (JOLED only)"""
-        if self.has_rgb:
-            self.buttons.set_rgb(red, green, blue)
+        if self.rgb:
+            self.rgb.set(red, green, blue)
     
     def rgb_off(self):
         """Turn off RGB LED (JOLED only)"""
-        if self.has_rgb:
-            self.buttons.rgb_off()
+        if self.rgb:
+            self.rgb.off()
     
     def rgb_color(self, color):
         """Set RGB LED to predefined color (JOLED only)
         
         Available colors: red, green, blue, yellow, magenta, cyan, white, off
         """
-        if self.has_rgb:
-            self.buttons.rgb_color(color)
+        if self.rgb:
+            self.rgb.color(color)
     
-    def rgb_pulse(self, color, speed=0.1, pulses=-1, callback=None):
+    def rgb_pulse(self, color, speed=0.1, count=-1, callback=None):
         """Start pulsing RGB LED (JOLED only)
         
         Args:
             color: Color to pulse (string or RGB tuple)
             speed: Pulse speed (0.05-0.5, lower = faster)
-            pulses: Number of complete pulses (-1 = infinite)
+            count: Number of complete pulses (-1 = infinite)
             callback: Function to call when pulsing completes
         """
-        if self.has_rgb:
-            self.buttons.start_pulse(color, speed, pulses, callback)
+        if self.rgb:
+            self.rgb.pulse(color, speed, count, callback)
     
     def rgb_flash(self, color, count=3, on_time=200, off_time=200, callback=None):
         """Flash RGB LED a specific number of times (JOLED only)
@@ -654,18 +701,18 @@ class OLEDController:
             off_time: Time LED is off (ms)
             callback: Function to call when flashing completes
         """
-        if self.has_rgb:
-            self.buttons.pulse_flash(color, count, on_time, off_time, callback)
+        if self.rgb:
+            self.rgb.flash(color, count, on_time, off_time, callback)
     
     def rgb_stop_animation(self):
         """Stop any RGB LED animation (pulsing/flashing) (JOLED only)"""
-        if self.has_rgb:
-            self.buttons.stop_pulse()
+        if self.rgb:
+            self.rgb.stop_animation()
     
     def rgb_is_animating(self):
         """Check if RGB LED is currently animating (JOLED only)"""
-        if self.has_rgb:
-            return self.buttons.is_pulsing()
+        if self.rgb:
+            return self.rgb.is_animating()
         return False
     
     @staticmethod

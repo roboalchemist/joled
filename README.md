@@ -162,16 +162,26 @@ controller.button_just_pressed(button) # Check if button was just pressed
 
 #### RGB LED Methods (JOLED Only)
 ```python
-# Static colors
+# Method 1: Direct controller methods
 controller.set_rgb(red=True, green=False, blue=False)  # Set individual colors
 controller.rgb_color('red')                           # Set predefined color
 controller.rgb_off()                                  # Turn off RGB LED
 
-# Animations
-controller.rgb_pulse('blue', speed=0.1, pulses=5, callback=func)  # Pulse animation
-controller.rgb_flash('red', count=3, on_time=200, off_time=200)   # Flash animation
-controller.rgb_stop_animation()                                  # Stop animations
-controller.rgb_is_animating()                                    # Check if animating
+# Method 2: RGB sub-controller access (recommended)
+controller.rgb.set(red=True, green=False, blue=False) # Direct RGB control
+controller.rgb.color('red')                           # Set predefined color
+controller.rgb.off()                                  # Turn off RGB LED
+
+# Animations (both methods work)
+controller.rgb_pulse('blue', speed=0.1, count=5, callback=func)  # Via controller
+controller.rgb.pulse('blue', speed=0.1, count=5, callback=func)  # Via sub-controller
+
+controller.rgb_flash('red', count=3, on_time=200, off_time=200)  # Via controller  
+controller.rgb.flash('red', count=3, on_time=200, off_time=200)  # Via sub-controller
+
+# Animation control
+controller.rgb_stop_animation()  # or controller.rgb.stop_animation()
+controller.rgb_is_animating()    # or controller.rgb.is_animating()
 ```
 
 #### Utility Methods
@@ -180,6 +190,28 @@ controller.scan_i2c()               # Scan I2C bus for devices
 
 # JOLED Helper
 controller = OLEDController.create_joled()  # Pre-configured for JOLED
+```
+
+### RGBController Class (Standalone)
+
+```python
+from oled_controller import RGBController
+from machine import I2C, Pin
+
+# Create standalone RGB controller
+i2c = I2C(0, sda=Pin(6), scl=Pin(7))
+rgb = RGBController(i2c, addr=0x20)
+
+# RGB control
+rgb.set(red=True, green=False, blue=False)  # Set individual colors
+rgb.color('blue')                           # Set predefined color
+rgb.off()                                   # Turn off
+
+# Animations
+rgb.pulse('red', speed=0.1, count=3, callback=done_func)
+rgb.flash('green', count=5, on_time=200, off_time=100)
+rgb.stop_animation()                        # Stop any animation
+rgb.is_animating()                         # Check if animating
 ```
 
 ### Font5x7 Class
@@ -260,31 +292,38 @@ for color in colors:
 controller.rgb_off()
 ```
 
-### JOLED RGB Pulsing Demo
+### JOLED RGB Sub-Controller Demo
 ```python
 from oled_controller import OLEDController
 import time
 
 controller = OLEDController.create_joled()
 
-# Pulse red 3 times with callback
+# Access RGB as a sub-controller
+rgb = controller.rgb
+
+# Direct RGB control
+rgb.color('red')
+time.sleep(1)
+
+# Pulse with callback
 def pulse_complete():
-    print("Red pulsing done!")
-    controller.rgb_color('green')  # Switch to solid green
+    print("Pulsing done!")
+    rgb.color('green')  # Switch to solid green
 
-controller.clear()
-controller.center_text("Pulsing Demo", 20)
-controller.show()
+rgb.pulse('blue', speed=0.1, count=3, callback=pulse_complete)
 
-# Start pulsing red (3 complete pulses)
-controller.rgb_pulse('red', speed=0.1, pulses=3, callback=pulse_complete)
+# Wait for pulsing to complete
+while rgb.is_pulsing():
+    time.sleep(0.1)
 
-# Flash blue when center button pressed
-while True:
-    controller.update_buttons()
-    if controller.button_just_pressed(7):  # Center
-        controller.rgb_flash('blue', count=5, on_time=100, off_time=100)
-    time.sleep(0.05)
+# Flash sequence
+rgb.flash('yellow', count=5, on_time=200, off_time=100)
+
+# Manual RGB control
+rgb.set(red=True, green=True, blue=False)  # Yellow
+time.sleep(1)
+rgb.off()
 ```
 
 ### Graphics Demo
