@@ -28,8 +28,8 @@ mpremote mip install github:roboalchemist/joled
 ```python
 from oled_controller import OLEDController
 
-# Initialize controller (default I2C pins and addresses)
-controller = OLEDController()
+# Initialize JOLED controller
+controller = OLEDController(sda_pin=6, scl_pin=7)
 
 # Clear display and show text
 controller.clear()
@@ -37,27 +37,73 @@ controller.text("Hello World!", 0, 0)
 controller.center_text("Centered", 20)
 controller.show()
 
-# Check button input
+# Check button input (8 total inputs: 5-way D-pad + 3 buttons)
 controller.update_buttons()
-if controller.button_just_pressed(0):
+if controller.button_just_pressed(7):  # Center button
     controller.clear()
-    controller.text("Button 0 pressed!", 0, 0)
+    controller.text("Center pressed!", 0, 0)
     controller.show()
 ```
 
 ## Hardware Setup
 
-### I2C OLED Display
+### JOLED Controller Specifications
+
+The JOLED controller follows the QWIIC standard (https://www.sparkfun.com/qwiic) for easy connectivity.
+
+**I2C Configuration:**
+- **SCL**: Pin 7
+- **SDA**: Pin 6  
+- **Frequency**: 400kHz
+
+**Components:**
+
+#### 128x64 SSD1306 OLED Display
+- **I2C Address**: 0x3C (default)
+- **Resolution**: 128x64 pixels
+- Connected via I2C bus
+
+#### PCF8575 Port Expander  
+- **I2C Address**: 0x20
+- **Initialization**: Write 0x0007 to establish baseline state (buttons low, LEDs high/off)
+
+**Controls:**
+
+#### 5-Way D-Pad (Active High, Pulled Low)
+- **Up**: P6
+- **Down**: P4  
+- **Left**: P5
+- **Right**: P3
+- **Center**: P7
+
+#### 3 Buttons (Active High, Pulled Low)
+- **B1**: P2
+- **B2**: P1
+- **B3**: P0
+
+#### RGB LED (Active Low)
+- **Red**: P8
+- **Green**: P9
+- **Blue**: P10
+
+**Physical Layout:**
+```
+JOLED Controller:
+        ------------------------------------------
+        |                              [RGB]     |
+[qwiic]<|    ----------------        U           |>[qwiic]
+        |    |    128x64    |     L  C  R        |
+        |    | SSD1306 OLED |        D           |
+[qwiic]<|    ----------------                    |>[qwiic]
+        |                       B1   B2  B3      |
+        ------------------------------------------
+```
+
+### Generic I2C Setup (Other Hardware)
 - **SDA**: Connect to your microcontroller's SDA pin (default: GPIO 4)
-- **SCL**: Connect to your microcontroller's SCL pin (default: GPIO 5)
+- **SCL**: Connect to your microcontroller's SCL pin (default: GPIO 5)  
 - **VCC**: 3.3V or 5V (depending on display)
 - **GND**: Ground
-- **Default I2C Address**: 0x3C
-
-### Button Controller (Optional)
-- I2C GPIO expander for button input
-- **Default I2C Address**: 0x20
-- Supports up to 4 buttons by default
 
 ## API Reference
 
@@ -65,6 +111,14 @@ if controller.button_just_pressed(0):
 
 #### Initialization
 ```python
+# JOLED Controller (recommended)
+controller = OLEDController(
+    sda_pin=6,          # JOLED SDA pin
+    scl_pin=7,          # JOLED SCL pin
+    num_buttons=8       # 5-way D-pad + 3 buttons
+)
+
+# Generic setup (other hardware)
 controller = OLEDController(
     i2c_bus=0,          # I2C bus number (0 or 1)
     sda_pin=4,          # SDA pin number
@@ -137,24 +191,27 @@ controller.rect(0, 20, 128, 20)
 controller.show()
 ```
 
-### Button Input
+### JOLED Button Input
 ```python
 from oled_controller import OLEDController
 import time
 
-controller = OLEDController()
+controller = OLEDController(sda_pin=6, scl_pin=7, num_buttons=8)
+
+# Button mapping for JOLED
+button_names = ["B3", "B2", "B1", "Right", "Down", "Left", "Up", "Center"]
 
 while True:
     controller.update_buttons()
     
     controller.clear()
-    controller.text("Press buttons:", 0, 0)
+    controller.text("JOLED Controls:", 0, 0)
     
-    for i in range(4):
+    for i in range(8):
         if controller.button_pressed(i):
-            controller.text(f"Button {i}: ON", 0, 10 + i*10)
+            controller.text(f"{button_names[i]}: ON", 0, 10 + (i%6)*8)
         else:
-            controller.text(f"Button {i}: OFF", 0, 10 + i*10)
+            controller.text(f"{button_names[i]}: OFF", 70, 10 + (i%6)*8)
     
     controller.show()
     time.sleep(0.1)
@@ -178,9 +235,15 @@ controller.show()
 
 ## Configuration
 
-### Custom I2C Pins
+### JOLED Controller Setup
 ```python
-# Use different I2C pins
+# JOLED with default settings
+controller = OLEDController(sda_pin=6, scl_pin=7, num_buttons=8)
+```
+
+### Custom I2C Pins (Other Hardware)
+```python
+# Use different I2C pins for generic hardware
 controller = OLEDController(sda_pin=21, scl_pin=22)
 ```
 
@@ -212,8 +275,35 @@ controller = OLEDController(i2c_bus=i2c)
 2. Check GPIO expander connections
 3. The library will work without buttons if no GPIO expander is found
 
+### JOLED Button Mapping
+```python
+# JOLED button mapping (PCF8575 pins P0-P7)
+BUTTON_MAP = {
+    0: "B3",     # P0 - Button 3
+    1: "B2",     # P1 - Button 2  
+    2: "B1",     # P2 - Button 1
+    3: "Right",  # P3 - D-pad Right
+    4: "Down",   # P4 - D-pad Down
+    5: "Left",   # P5 - D-pad Left
+    6: "Up",     # P6 - D-pad Up
+    7: "Center"  # P7 - D-pad Center
+}
+```
+
+### JOLED RGB LED Control
+The RGB LED can be controlled by writing directly to the PCF8575 (pins P8-P10 are active low):
+```python
+# RGB LED control (requires direct I2C access)
+# Note: LEDs are active low, so 0 = ON, 1 = OFF
+controller.i2c.writeto(0x20, bytes([0x0700]))  # All LEDs off
+controller.i2c.writeto(0x20, bytes([0x06FF]))  # Red LED on
+controller.i2c.writeto(0x20, bytes([0x05FF]))  # Green LED on  
+controller.i2c.writeto(0x20, bytes([0x03FF]))  # Blue LED on
+```
+
 ### Common I2C Addresses
 - **OLED Display**: 0x3C or 0x3D
+- **JOLED PCF8575**: 0x20
 - **GPIO Expanders**: 0x20-0x27 (MCP23017), 0x38-0x3F (PCF8574)
 
 ## Hardware Compatibility
@@ -227,7 +317,14 @@ controller = OLEDController(i2c_bus=i2c)
 - 128x64 SSD1306
 - 128x32 SSD1306
 
-### GPIO Expanders
+### JOLED Hardware
+- PCF8575 (16-bit I2C GPIO expander)
+- 128x64 SSD1306 OLED display
+- 5-way D-pad navigation
+- 3 additional buttons
+- RGB LED indicator
+
+### Generic GPIO Expanders  
 - MCP23017 (16-bit)
 - PCF8574 (8-bit)
 - Generic I2C GPIO expanders
