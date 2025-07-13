@@ -1,0 +1,9 @@
+{
+  "urls": [
+    ["oled_controller/__init__.py", "github:joled/micropython-oled-controller/oled_controller/__init__.py"],
+    ["oled_controller/oled_controller.py", "github:joled/micropython-oled-controller/oled_controller/oled_controller.py"],
+    ["oled_controller/font5x7.py", "github:joled/micropython-oled-controller/oled_controller/font5x7.py"]
+  ],
+  "deps": [],
+  "version": "1.0.0"
+}
