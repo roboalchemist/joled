@@ -154,11 +154,11 @@ controller.invert(True/False)             # Invert colors
 controller.poweroff()                     # Turn off display
 
 # Method 2: Display sub-controller access (recommended)
-controller.display.clear()               # Direct display control
-controller.display.show()                # Update display
-controller.display.pixel(x, y, color)    # Set pixel
-controller.display.text(text, x, y)      # Draw text
-controller.display.center_text(text, y)  # Centered text
+controller.disp.clear()                  # Direct display control
+controller.disp.show()                   # Update display
+controller.disp.pixel(x, y, color)       # Set pixel
+controller.disp.text(text, x, y)         # Draw text
+controller.disp.center_text(text, y)     # Centered text
 ```
 
 #### Button Methods
@@ -171,11 +171,11 @@ controller.get_pressed_buttons()      # Get list of pressed buttons
 controller.get_just_pressed_buttons() # Get list of just pressed buttons
 
 # Method 2: Button sub-controller access (recommended)
-controller.buttons.update()          # Update button states
-controller.buttons.is_pressed(button) # Check if button is pressed
-controller.buttons.was_pressed(button) # Check if button was just pressed
-controller.buttons.get_pressed_buttons() # Get list of pressed buttons
-controller.buttons.get_just_pressed_buttons() # Get list of just pressed
+controller.btns.update()          # Update button states
+controller.btns.is_pressed(button) # Check if button is pressed
+controller.btns.was_pressed(button) # Check if button was just pressed
+controller.btns.get_pressed_buttons() # Get list of pressed buttons
+controller.btns.get_just_pressed_buttons() # Get list of just pressed
 ```
 
 #### RGB LED Methods (JOLED Only)
@@ -220,17 +220,17 @@ from machine import I2C, Pin
 i2c = I2C(0, sda=Pin(6), scl=Pin(7))
 
 # Create standalone controllers
-display = DisplayController(i2c, width=128, height=64, addr=0x3C)
-buttons = ButtonController(i2c, addr=0x20, num_buttons=8, is_joled=True)  
+disp = DisplayController(i2c, width=128, height=64, addr=0x3C)
+btns = ButtonController(i2c, addr=0x20, num_buttons=8, is_joled=True)  
 rgb = RGBController(i2c, addr=0x20)
 
 # Use independently
-display.clear()
-display.text("Standalone", 0, 0)
-display.show()
+disp.clear()
+disp.text("Standalone", 0, 0)
+disp.show()
 
-buttons.update()
-if buttons.is_pressed(0):
+btns.update()
+if btns.is_pressed(0):
     rgb.color('red')
 ```
 
@@ -320,15 +320,15 @@ import time
 controller = OLEDController.create_joled()
 
 # Access all sub-controllers
-display = controller.display
-buttons = controller.buttons
+disp = controller.disp
+btns = controller.btns
 rgb = controller.rgb
 
 # Display sub-controller
-display.clear()
-display.center_text("Sub-Controllers", 10)
-display.center_text("Demo", 25)
-display.show()
+disp.clear()
+disp.center_text("Sub-Controllers", 10)
+disp.center_text("Demo", 25)
+disp.show()
 
 # RGB sub-controller
 rgb.color('blue')
@@ -336,13 +336,13 @@ time.sleep(1)
 
 # Button sub-controller
 while True:
-    buttons.update()
-    pressed = buttons.get_pressed_buttons()
+    btns.update()
+    pressed = btns.get_pressed_buttons()
     
     if pressed:
-        display.clear()
-        display.text(f"Pressed: {pressed}", 0, 20)
-        display.show()
+        disp.clear()
+        disp.text(f"Pressed: {pressed}", 0, 20)
+        disp.show()
         
         # Change RGB based on buttons
         if 0 in pressed:
@@ -350,7 +350,7 @@ while True:
         elif 1 in pressed:
             rgb.pulse('green', count=2)
             
-    if buttons.was_pressed(7):  # Center to exit
+    if btns.was_pressed(7):  # Center to exit
         break
     
     time.sleep(0.05)

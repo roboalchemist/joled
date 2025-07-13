@@ -604,11 +604,11 @@ class OLEDController:
             self.i2c = I2C(i2c_bus, sda=Pin(sda_pin), scl=Pin(scl_pin), freq=400000)
         
         # Initialize display sub-controller
-        self.display = DisplayController(self.i2c, width, height, oled_addr)
+        self.disp = DisplayController(self.i2c, width, height, oled_addr)
         
         # Initialize button sub-controller (JOLED uses same address as RGB)
         is_joled = has_rgb  # JOLED has both buttons and RGB on same PCF8575
-        self.buttons = ButtonController(self.i2c, button_addr, num_buttons, is_joled)
+        self.btns = ButtonController(self.i2c, button_addr, num_buttons, is_joled)
         
         # Initialize RGB sub-controller (if enabled)
         self.rgb = None
@@ -624,73 +624,73 @@ class OLEDController:
     # Display Methods - Direct access to display sub-controller
     def clear(self):
         """Clear the display"""
-        self.display.clear()
+        self.disp.clear()
     
     def show(self):
         """Update the display"""
-        self.display.show()
+        self.disp.show()
     
     def pixel(self, x, y, color=1):
         """Set a pixel"""
-        self.display.pixel(x, y, color)
+        self.disp.pixel(x, y, color)
     
     def line(self, x0, y0, x1, y1, color=1):
         """Draw a line"""
-        self.display.line(x0, y0, x1, y1, color)
+        self.disp.line(x0, y0, x1, y1, color)
     
     def rect(self, x, y, w, h, color=1):
         """Draw rectangle outline"""
-        self.display.rect(x, y, w, h, color)
+        self.disp.rect(x, y, w, h, color)
     
     def fill_rect(self, x, y, w, h, color=1):
         """Draw filled rectangle"""
-        self.display.fill_rect(x, y, w, h, color)
+        self.disp.fill_rect(x, y, w, h, color)
     
     def text(self, text, x, y, color=1):
         """Draw text using 5x7 font"""
-        self.display.text(text, x, y, color)
+        self.disp.text(text, x, y, color)
     
     def text_width(self, text):
         """Calculate text width in pixels"""
-        return self.display.text_width(text)
+        return self.disp.text_width(text)
     
     def center_text(self, text, y, color=1):
         """Draw text centered horizontally"""
-        self.display.center_text(text, y, color)
+        self.disp.center_text(text, y, color)
     
     # Button Methods - Direct access to button sub-controller
     def update_buttons(self):
         """Update button states"""
-        self.buttons.update()
+        self.btns.update()
     
     def button_pressed(self, button):
         """Check if button is currently pressed"""
-        return self.buttons.is_pressed(button)
+        return self.btns.is_pressed(button)
     
     def button_just_pressed(self, button):
         """Check if button was just pressed"""
-        return self.buttons.was_pressed(button)
+        return self.btns.was_pressed(button)
     
     def get_pressed_buttons(self):
         """Get list of currently pressed button numbers"""
-        return self.buttons.get_pressed_buttons()
+        return self.btns.get_pressed_buttons()
     
     def get_just_pressed_buttons(self):
         """Get list of buttons that were just pressed"""
-        return self.buttons.get_just_pressed_buttons()
+        return self.btns.get_just_pressed_buttons()
     
     # Display Control Methods - Direct access to display sub-controller
     def contrast(self, contrast):
         """Set display contrast (0-255)"""
-        self.display.contrast(contrast)
+        self.disp.contrast(contrast)
     
     def invert(self, invert=True):
         """Invert display colors"""
-        self.display.invert(invert)
+        self.disp.invert(invert)
     
     def poweroff(self):
         """Turn off display"""
-        self.display.poweroff()
+        self.disp.poweroff()
     
     def scan_i2c(self):
         """Scan I2C bus for devices"""
