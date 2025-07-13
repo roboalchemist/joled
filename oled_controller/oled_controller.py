@@ -762,3 +762,13 @@ class OLEDController:
             num_buttons=8,
             has_rgb=True
         )
+    
+    @staticmethod
+    def create(sda_pin=6, scl_pin=7):
+        """Create OLEDController configured for JOLED hardware (short form)"""
+        return OLEDController(
+            sda_pin=sda_pin,
+            scl_pin=scl_pin,
+            num_buttons=8,
+            has_rgb=True
+        )

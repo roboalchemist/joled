@@ -29,7 +29,7 @@ mpremote mip install github:roboalchemist/joled
 from oled_controller import OLEDController
 
 # Initialize JOLED controller with RGB support
-controller = OLEDController.create_joled()
+controller = OLEDController.create()
 
 # Clear display and show text
 controller.clear()
@@ -114,7 +114,7 @@ JOLED Controller:
 #### Initialization
 ```python
 # JOLED Controller (recommended)
-controller = OLEDController.create_joled()  # Pre-configured for JOLED
+controller = OLEDController.create()  # Pre-configured for JOLED
 
 # Or manually configure JOLED
 controller = OLEDController(
@@ -207,7 +207,7 @@ controller.rgb_is_animating()    # or controller.rgb.is_animating()
 controller.scan_i2c()               # Scan I2C bus for devices
 
 # JOLED Helper
-controller = OLEDController.create_joled()  # Pre-configured for JOLED
+controller = OLEDController.create()  # Pre-configured for JOLED
 ```
 
 ### Standalone Sub-Controllers
@@ -298,7 +298,7 @@ from oled_controller import OLEDController
 import time
 
 # Initialize JOLED with RGB support
-controller = OLEDController.create_joled()
+controller = OLEDController.create()
 
 colors = ['red', 'green', 'blue', 'yellow', 'magenta', 'cyan', 'white']
 
@@ -317,7 +317,7 @@ controller.rgb_off()
 from oled_controller import OLEDController
 import time
 
-controller = OLEDController.create_joled()
+controller = OLEDController.create()
 
 # Access all sub-controllers
 disp = controller.disp
@@ -379,7 +379,7 @@ controller.show()
 ### JOLED Controller Setup
 ```python
 # JOLED with RGB LED support
-controller = OLEDController.create_joled()
+controller = OLEDController.create()
 # Or: controller = OLEDController(sda_pin=6, scl_pin=7, num_buttons=8, has_rgb=True)
 ```
 
@@ -435,7 +435,7 @@ BUTTON_MAP = {
 ### JOLED RGB LED Control
 ```python
 # Initialize JOLED with RGB support
-controller = OLEDController.create_joled()
+controller = OLEDController.create()
 
 # Set individual colors
 controller.set_rgb(red=True, green=False, blue=False)  # Red only

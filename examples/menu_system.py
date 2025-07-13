@@ -194,8 +194,8 @@ class SimpleMenu:
             time.sleep(0.05)
 
 def main():
-    # Initialize controller
-    controller = OLEDController()
+    # Initialize JOLED controller
+    controller = OLEDController.create()
     
     print("Menu System Demo Starting...")
     print("Controls:")

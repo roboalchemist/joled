@@ -13,7 +13,7 @@ def flash_complete_callback():
 
 def main():
     # Initialize JOLED controller with RGB support
-    controller = OLEDController.create_joled()
+    controller = OLEDController.create()
     
     print("JOLED RGB Pulse Demo Starting...")
     

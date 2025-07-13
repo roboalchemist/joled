@@ -5,7 +5,7 @@ import time
 
 def main():
     # Initialize JOLED controller with RGB support
-    controller = OLEDController.create_joled()
+    controller = OLEDController.create()
     
     print("JOLED RGB LED Demo Starting...")
     print("Press buttons to change LED colors!")

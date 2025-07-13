@@ -4,9 +4,8 @@ from oled_controller import OLEDController
 import time
 
 def main():
-    # Initialize controller with default settings
-    # OLED at 0x3C, buttons at 0x20, 128x64 display
-    controller = OLEDController()
+    # Initialize JOLED controller with all features
+    controller = OLEDController.create()
     
     print("OLED Controller Basic Usage Example")
     print("Scanning I2C bus...")

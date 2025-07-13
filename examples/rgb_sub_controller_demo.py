@@ -5,7 +5,7 @@ import time
 
 def main():
     # Initialize JOLED controller
-    controller = OLEDController.create_joled()
+    controller = OLEDController.create()
     
     print("RGB Sub-Controller Demo")
     print("RGB is accessible as controller.rgb")
