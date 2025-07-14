@@ -73,7 +73,7 @@ class JOLEDMenu:
         # Show current RGB status
         if self.rgb:
             self.disp.text("RGB:", 85, 0)
-            self.disp.fill_rect(110, 0, 8, 7)
+            self.disp.fill_rect(110, 0, 8, 7, 1)
         
         # Draw menu items (show 5 at a time)
         start_idx = max(0, self.selected_item - 2)
@@ -85,7 +85,7 @@ class JOLEDMenu:
             
             if i == self.selected_item:
                 # Highlight selected item
-                self.disp.fill_rect(0, y_pos - 1, 128, 9)
+                self.disp.fill_rect(0, y_pos - 1, 128, 9, 1)
                 self.disp.text(f">{item}", 2, y_pos, 0)  # Black text on white
                 
                 # Update RGB to match selection
@@ -157,7 +157,7 @@ class JOLEDMenu:
             for i, test in enumerate(tests):
                 y_pos = 15 + i * 10
                 if i == selected:
-                    self.disp.fill_rect(0, y_pos - 1, 128, 9)
+                    self.disp.fill_rect(0, y_pos - 1, 128, 9, 1)
                     self.disp.text(f">{test}", 2, y_pos, 0)
                 else:
                     self.disp.text(f" {test}", 2, y_pos)
@@ -259,7 +259,7 @@ class JOLEDMenu:
             for i, demo in enumerate(demos):
                 y_pos = 15 + i * 10
                 if i == selected:
-                    self.disp.fill_rect(0, y_pos - 1, 128, 9)
+                    self.disp.fill_rect(0, y_pos - 1, 128, 9, 1)
                     self.disp.text(f">{demo}", 2, y_pos, 0)
                 else:
                     self.disp.text(f" {demo}", 2, y_pos)
@@ -406,7 +406,7 @@ class JOLEDMenu:
             for i, demo in enumerate(demos):
                 y_pos = 15 + i * 10
                 if i == selected:
-                    self.disp.fill_rect(0, y_pos - 1, 128, 9)
+                    self.disp.fill_rect(0, y_pos - 1, 128, 9, 1)
                     self.disp.text(f">{demo}", 2, y_pos, 0)
                 else:
                     self.disp.text(f" {demo}", 2, y_pos)
@@ -462,9 +462,9 @@ class JOLEDMenu:
             self.disp.rect(10 + i*5, 15 + i*3, 108 - i*10, 45 - i*6)
         
         # Filled rectangles
-        self.disp.fill_rect(5, 50, 20, 10)
-        self.disp.fill_rect(30, 52, 15, 6)
-        self.disp.fill_rect(50, 54, 10, 2)
+        self.disp.fill_rect(5, 50, 20, 10, 1)
+        self.disp.fill_rect(30, 52, 15, 6, 1)
+        self.disp.fill_rect(50, 54, 10, 2, 1)
         
         self.disp.show()
         self.wait_for_button()
@@ -478,7 +478,7 @@ class JOLEDMenu:
         for x in range(0, 128, 8):
             for y in range(10, 64, 8):
                 if (x + y) % 16 == 0:
-                    self.disp.fill_rect(x, y, 4, 4)
+                    self.disp.fill_rect(x, y, 4, 4, 1)
         
         self.disp.show()
         self.wait_for_button()
@@ -578,7 +578,7 @@ class JOLEDMenu:
     def show_temp_message(self, message):
         """Show temporary message in corner"""
         # Save current display area
-        self.disp.fill_rect(0, 55, 128, 9)
+        self.disp.fill_rect(0, 55, 128, 9, 1)
         self.disp.text(message, 2, 56, 0)
         self.disp.show()
         time.sleep(0.5)
